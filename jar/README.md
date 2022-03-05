@@ -75,7 +75,7 @@
     "type": 3,
     "api": "csp_N0ys",
     "searchable": 1,
-    "quickSearch": 0,
+    "quickSearch": 1,
     "filterable": 0
   },
   {

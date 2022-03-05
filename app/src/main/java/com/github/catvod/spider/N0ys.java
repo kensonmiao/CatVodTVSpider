@@ -6,9 +6,7 @@ import android.text.TextUtils;
 
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.crawler.SpiderReq;
-import com.github.catvod.crawler.SpiderReqResult;
-import com.github.catvod.crawler.SpiderUrl;
+import com.github.catvod.utils.okhttp.OkHttpUtil;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -35,7 +33,7 @@ import java.util.regex.Pattern;
  * Author: 小黄瓜
  */
 public class N0ys extends Spider {
-    private static final String siteUrl = "http://1090ys8.com/";
+    private static final String siteUrl = "http://1090ys8.com";
     private static final String siteHost = "1090ys8.com";
     private static final String ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.54 Safari/537.36";
 
@@ -53,7 +51,7 @@ public class N0ys extends Spider {
     public void init(Context context) {
         super.init(context);
         try {
-            playerConfig = new JSONObject("{\"youbo\":{\"sh\":\"高速1\",\"sn\":\"0\",\"pu\":\"http://1090ys2.com/x2.php?id=\",\"or\":999},\"wanpan\":{\"sh\":\"高速备用\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"niuxyun\":{\"sh\":\"高速2\",\"sn\":\"1\",\"pu\":\"http://1090ys2.com/nxjx/jx.php?id=\",\"or\":999},\"bjm3u8\":{\"sh\":\"备用2\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"dbm3u8\":{\"sh\":\"备用3\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"nfmp4\":{\"sh\":\"高速3\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"tkm3u8\":{\"sh\":\"备用1\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"wjm3u8\":{\"sh\":\"备用4\",\"sn\":\"0\",\"pu\":\"\",\"or\":999}}");
+            playerConfig = new JSONObject("{\"youbo\":{\"sh\":\"高速1\",\"sn\":\"0\",\"pu\":\"http://jx1090ys5.hongfanedu.top/x2.php?id=\",\"or\":999},\"wanpan\":{\"sh\":\"高速备用\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"niuxyun\":{\"sh\":\"高速2\",\"sn\":\"1\",\"pu\":\"http://1090ys2.com/nxjx/jx.php?id=\",\"or\":999},\"bjm3u8\":{\"sh\":\"备用2\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"dbm3u8\":{\"sh\":\"备用3\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"nfmp4\":{\"sh\":\"高速3\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"tkm3u8\":{\"sh\":\"备用1\",\"sn\":\"0\",\"pu\":\"\",\"or\":999},\"wjm3u8\":{\"sh\":\"备用4\",\"sn\":\"0\",\"pu\":\"\",\"or\":999}}");
         } catch (JSONException e) {
             SpiderDebug.log(e);
         }
@@ -86,9 +84,7 @@ public class N0ys extends Spider {
     @Override
     public String homeContent(boolean filter) {
         try {
-            SpiderUrl su = new SpiderUrl(siteUrl, getHeaders(siteUrl));
-            SpiderReqResult srr = SpiderReq.get(su);
-            Document doc = Jsoup.parse(srr.content);
+            Document doc = Jsoup.parse(OkHttpUtil.string(siteUrl, getHeaders(siteUrl)));
             // 分类节点
             Elements elements = doc.select("ul.type-slide > li a");
             JSONArray classes = new JSONArray();
@@ -149,10 +145,7 @@ public class N0ys extends Spider {
         try {
             // 获取分类数据的url
             String url = siteUrl + "/whole/" + tid + "/page/" + pg + ".html";
-            SpiderUrl su = new SpiderUrl(url, getHeaders(url));
-            // 发起http请求
-            SpiderReqResult srr = SpiderReq.get(su);
-            String html = srr.content;
+            String html = OkHttpUtil.string(url, getHeaders(url));
             Document doc = Jsoup.parse(html);
             JSONObject result = new JSONObject();
             int pageCount = 0;
@@ -233,9 +226,7 @@ public class N0ys extends Spider {
         try {
             // 视频详情url
             String url = siteUrl + "/show/" + ids.get(0) + ".html";
-            SpiderUrl su = new SpiderUrl(url, getHeaders(url));
-            SpiderReqResult srr = SpiderReq.get(su);
-            Document doc = Jsoup.parse(srr.content);
+            Document doc = Jsoup.parse(OkHttpUtil.string(url, getHeaders(url)));
             JSONObject result = new JSONObject();
             JSONObject vodList = new JSONObject();
 
@@ -257,19 +248,9 @@ public class N0ys extends Spider {
                 } else if (info.equals("更新：")) {
                     remark = text.nextSibling().outerHtml().trim();
                 } else if (info.equals("导演：")) {
-                    List<String> directors = new ArrayList<>();
-                    Elements aa = text.parent().select("a");
-                    for (int j = 0; j < aa.size(); j++) {
-                        directors.add(aa.get(j).text());
-                    }
-                    director = TextUtils.join(",", directors);
+                    director = text.nextSibling().outerHtml().trim();
                 } else if (info.equals("主演：")) {
-                    List<String> actors = new ArrayList<>();
-                    Elements aa = text.parent().select("a");
-                    for (int j = 0; j < aa.size(); j++) {
-                        actors.add(aa.get(j).text());
-                    }
-                    actor = TextUtils.join(",", actors);
+                    actor = text.nextSibling().outerHtml().trim();
                 }
             }
 
@@ -368,10 +349,8 @@ public class N0ys extends Spider {
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
             // 播放页 url
-            String url = "http://98bbw.com/play/" + id + ".html";
-            SpiderUrl su = new SpiderUrl(url, getHeaders(url));
-            SpiderReqResult srr = SpiderReq.get(su);
-            Document doc = Jsoup.parse(srr.content);
+            String url = "http://1090ys8.com/play/" + id + ".html";
+            Document doc = Jsoup.parse(OkHttpUtil.string(url, getHeaders(url)));
             Elements allScript = doc.select("script");
             JSONObject result = new JSONObject();
             for (int i = 0; i < allScript.size(); i++) {
@@ -389,19 +368,15 @@ public class N0ys extends Spider {
                         if (from.equals("youbo")) {
                             // 感谢猫大神的直连解密代码
                             HashMap<String, String> hds = getHeaders(url);
-                            hds.put("Host", "1090ys2.com");
+                            hds.put("Host", "jx1090ys5.hongfanedu.top");
                             hds.put("Referer", url);
-                            SpiderUrl su1 = new SpiderUrl(playUrl + videoUrl, hds);
-                            SpiderReqResult srr1 = SpiderReq.get(su1);
-                            String content1 = srr1.content;
+                            String content1 = OkHttpUtil.string(playUrl + videoUrl, hds);
                             Document doc1 = Jsoup.parse(content1);
                             String url2 = doc1.selectFirst("iframe#WANG").attr("src");
                             String url2host = Uri.parse(url2).getHost();
                             hds.put("Host", url2host);
-                            hds.put("Referer", "http://1090ys2.com/");
-                            SpiderUrl su2 = new SpiderUrl(url2, hds);
-                            SpiderReqResult srr2 = SpiderReq.get(su2);
-                            String content2 = srr2.content;
+                            hds.put("Referer", "http://jx1090ys5.hongfanedu.top/");
+                            String content2 = OkHttpUtil.string(url2, hds);
                             String finder = "var id=\"";
                             start = content2.indexOf(finder) + finder.length();
                             end = content2.indexOf('\"', start);
@@ -466,33 +441,26 @@ public class N0ys extends Spider {
     @Override
     public String searchContent(String key, boolean quick) {
         try {
-            if (quick)
-                return "";
-            String url = siteUrl + "/search.html?wd=" + URLEncoder.encode(key) + "&submit=";
-            SpiderUrl su = new SpiderUrl(url, getHeaders(url));
-            SpiderReqResult srr = SpiderReq.get(su);
-            Document doc = Jsoup.parse(srr.content);
+            long currentTime = System.currentTimeMillis();
+            String url = siteUrl + "/index.php/ajax/suggest?mid=1&wd=" + URLEncoder.encode(key) + "&limit=10&timestamp=" + currentTime;
+            JSONObject searchResult = new JSONObject(OkHttpUtil.string(url, getHeaders(url)));
             JSONObject result = new JSONObject();
-
             JSONArray videos = new JSONArray();
-            Elements list = doc.select("div.col-lg-wide-75 ul.stui-vodlist__media li a.v-thumb");
-            for (int i = 0; i < list.size(); i++) {
-                Element vod = list.get(i);
-                String title = vod.attr("title");
-                String cover = vod.attr("data-original");
-                String remark = vod.selectFirst("span.pic-text").text();
-                Matcher matcher = regexVid.matcher(vod.attr("href"));
-                if (!matcher.find())
-                    continue;
-                String id = matcher.group(1);
-                JSONObject v = new JSONObject();
-                v.put("vod_id", id);
-                v.put("vod_name", title);
-                v.put("vod_pic", cover);
-                v.put("vod_remarks", remark);
-                videos.put(v);
+            if (searchResult.getInt("total") > 0) {
+                JSONArray lists = new JSONArray(searchResult.getString("list"));
+                for (int i = 0; i < lists.length(); i++) {
+                    JSONObject vod = lists.getJSONObject(i);
+                    String id = vod.getString("id");
+                    String title = vod.getString("name");
+                    String cover = vod.getString("pic");
+                    JSONObject v = new JSONObject();
+                    v.put("vod_id", id);
+                    v.put("vod_name", title);
+                    v.put("vod_pic", cover);
+                    v.put("vod_remarks", "");
+                    videos.put(v);
+                }
             }
-
             result.put("list", videos);
             return result.toString();
         } catch (Exception e) {

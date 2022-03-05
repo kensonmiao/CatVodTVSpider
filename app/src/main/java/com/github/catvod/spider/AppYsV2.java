@@ -14,11 +14,10 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,24 +26,25 @@ import java.util.regex.Pattern;
  * <p>
  * Author: 群友 不负此生
  */
-public class AppYs extends Spider {
-
-    private String extString = "";
+public class AppYsV2 extends Spider {
 
     @Override
     public void init(Context context, String extend) {
         super.init(context, extend);
-        this.extString = extend;
+        try {
+            extInfos = extend.split("###");
+        } catch (Throwable th) {
+        }
     }
 
     @Override
     public String homeContent(boolean filter) {
         try {
-            String url = getCateUrl(extString);
+            String url = getCateUrl(getApiUrl());
             JSONArray jsonArray = null;
             if (!url.isEmpty()) {
                 SpiderDebug.log(url);
-                String json = OkHttpUtil.string(url, getHeaders(url));
+                String json = desc(OkHttpUtil.string(url, getHeaders(url)), (byte) 0);
                 JSONObject obj = new JSONObject(json);
                 if (obj.has("list") && obj.get("list") instanceof JSONArray) {
                     jsonArray = obj.getJSONArray("list");
@@ -148,7 +148,7 @@ public class AppYs extends Spider {
     @Override
     public String homeVideoContent() {
         try {
-            String apiUrl = extString;
+            String apiUrl = getApiUrl();
             String url = getRecommendUrl(apiUrl);
             boolean isTV = false;
             if (url.isEmpty()) {
@@ -156,7 +156,7 @@ public class AppYs extends Spider {
                 isTV = true;
             }
             SpiderDebug.log(url);
-            String json = OkHttpUtil.string(url, getHeaders(url));
+            String json = desc(OkHttpUtil.string(url, getHeaders(url)), (byte) 1);
             JSONObject obj = new JSONObject(json);
             JSONArray videos = new JSONArray();
             if (isTV) {
@@ -205,17 +205,17 @@ public class AppYs extends Spider {
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
-            String apiUrl = extString;
+            String apiUrl = getApiUrl();
             String url = getCateFilterUrlPrefix(apiUrl) + tid + getCateFilterUrlSuffix(apiUrl);
             url = url.replace("#PN#", pg);
             url = url.replace("筛选class", (extend != null && extend.containsKey("class")) ? extend.get("class") : "");
             url = url.replace("筛选area", (extend != null && extend.containsKey("area")) ? extend.get("area") : "");
             url = url.replace("筛选lang", (extend != null && extend.containsKey("lang")) ? extend.get("lang") : "");
             url = url.replace("筛选year", (extend != null && extend.containsKey("year")) ? extend.get("year") : "");
-	    url = url.replace("筛选letter", (extend != null && extend.containsKey("letter")) ? extend.get("letter") : "");
+            url = url.replace("筛选letter", (extend != null && extend.containsKey("letter")) ? extend.get("letter") : "");
             url = url.replace("排序", (extend != null && extend.containsKey("排序")) ? extend.get("排序") : "");
             SpiderDebug.log(url);
-            String json = OkHttpUtil.string(url, getHeaders(url));
+            String json = desc(OkHttpUtil.string(url, getHeaders(url)), (byte) 2);
             JSONObject obj = new JSONObject(json);
             int totalPg = Integer.MAX_VALUE;
             try {
@@ -279,10 +279,10 @@ public class AppYs extends Spider {
     @Override
     public String detailContent(List<String> ids) {
         try {
-            String apiUrl = extString;
+            String apiUrl = getApiUrl();
             String url = getPlayUrlPrefix(apiUrl) + ids.get(0);
             SpiderDebug.log(url);
-            String json = OkHttpUtil.string(url, getHeaders(url));
+            String json = desc(OkHttpUtil.string(url, getHeaders(url)), (byte) 3);
             JSONObject obj = new JSONObject(json);
             JSONObject result = new JSONObject();
             JSONObject vod = new JSONObject();
@@ -300,9 +300,10 @@ public class AppYs extends Spider {
     @Override
     public String searchContent(String key, boolean quick) {
         try {
-            String apiUrl = extString;
+            String apiUrl = getApiUrl();
             String url = getSearchUrl(apiUrl, URLEncoder.encode(key));
-            String json = OkHttpUtil.string(url, getHeaders(url));
+            //System.out.println(url);
+            String json = desc(OkHttpUtil.string(url, getHeaders(url)), (byte) 5);
             JSONObject obj = new JSONObject(json);
             JSONArray jsonArray = null;
             JSONArray videos = new JSONArray();
@@ -345,12 +346,27 @@ public class AppYs extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            String apiUrl = extString;
-            String parseUrl = getParseUrl(apiUrl, flag);
-            String playerUrl = getPlayerUrl(apiUrl, parseUrl, id);
-            JSONObject result = new JSONObject();
-            getFinalVideo(playerUrl, result);
-            return result.toString();
+            ArrayList<String> parseUrls = parseUrlMap.get(flag);
+            if (parseUrls == null)
+                parseUrls = new ArrayList<>();
+            if (!parseUrls.isEmpty()) {
+                JSONObject result = getFinalVideo(flag, parseUrls, id);
+                if (result != null)
+                    return result.toString();
+            }
+            if (Misc.isVideoFormat(id)) {
+                JSONObject result = new JSONObject();
+                result.put("parse", 0);
+                result.put("playUrl", "");
+                result.put("url", id);
+                return result.toString();
+            } else {
+                JSONObject result = new JSONObject();
+                result.put("parse", 1);
+                result.put("jx", "1");
+                result.put("url", id);
+                return result.toString();
+            }
         } catch (Exception e) {
             SpiderDebug.log(e);
         }
@@ -389,32 +405,6 @@ public class AppYs extends Spider {
         } catch (JSONException e) {
         }
         return "";
-    }
-
-    private static HashMap<String, String> fakeVips = null;
-    private static final Object lock = new Object();
-
-    private static String stopVipFlag(String flag) {
-        synchronized (lock) {
-            if (fakeVips == null) {
-                fakeVips = new HashMap<>();
-                fakeVips.put("youku", "优酷M");
-                fakeVips.put("qq", "腾讯M");
-                fakeVips.put("iqiyi", "爱奇艺M");
-                fakeVips.put("qiyi", "奇艺M");
-                fakeVips.put("letv", "乐视M");
-                fakeVips.put("sohu", "搜狐M");
-                fakeVips.put("tudou", "土豆M");
-                fakeVips.put("pptv", "PPTVM");
-                fakeVips.put("mgtv", "芒果TVM");
-                fakeVips.put("wasu", "华数M");
-                fakeVips.put("bilibili", "哔哩M");
-            }
-            if (fakeVips.containsKey(flag)) {
-                return fakeVips.get(flag);
-            }
-            return flag;
-        }
     }
 
     private HashMap<String, String> getHeaders(String URL) {
@@ -480,29 +470,6 @@ public class AppYs extends Spider {
     private static final Pattern parsePattern = Pattern.compile("/.+\\?.+=");
     private static final Pattern parsePattern1 = Pattern.compile(".*(url|v|vid|php\\?id)=");
     private static final Pattern parsePattern2 = Pattern.compile("https?://[^/]*");
-    private static final Pattern[] parseMatchForDotVod = new Pattern[]{
-            Pattern.compile("jx\\.+huimaojia\\.+com/player"),
-            Pattern.compile("py\\.+789pan\\.+cn/player/tm\\.php\\?url="),
-            Pattern.compile("ztys\\.+waruanzy\\.+com/player/\\?url="),
-            Pattern.compile("yingshi\\.+waruanzy\\.+com/789pan/\\?url="),
-            Pattern.compile("vip\\.+parwix\\.+com:4433/player/\\?url="),
-            Pattern.compile("api\\.+cxitco\\.+cn"),
-            Pattern.compile("/vip\\.+renrenmi.cc"),
-            Pattern.compile("yanbing\\.+parwix\\.+com:4433/player"),
-            Pattern.compile("json\\.+cantin\\.+cc/apijson\\.php"),
-            Pattern.compile("ffdm\\.+miaoletv\\.+com/\\?url="),
-            Pattern.compile("vip\\.+sylwl\\.+cn/api/\\?key="),
-            Pattern.compile("jx\\.+dikotv\\.+com/\\?url="),
-            Pattern.compile("zly\\.+xjqxz\\.+top/player/\\?url="),
-            Pattern.compile("5znn\\.+xyz/m3u8\\.+php"),
-            Pattern.compile("uid=1735&my="),
-            Pattern.compile("api\\.+xkvideo\\.+design/m3u8\\.+php\\?url="),
-            Pattern.compile("play\\.+szbodankyy\\.+com/xxoocnmb"),
-            Pattern.compile("vip\\.+fj6080\\.+xyz/player/\\?url="),
-            Pattern.compile("a\\.+dxzj88\\.+com/jiexi"),
-            Pattern.compile("host\\.+q-q\\.+wang/api"),
-            Pattern.compile("保佑")
-    };
 
     private static final Pattern[] htmlVideoKeyMatch = new Pattern[]{
             Pattern.compile("player=new"),
@@ -523,28 +490,6 @@ public class AppYs extends Spider {
             return "okhttp/4.1.0";
         } else {
             return "Dalvik/2.1.0";
-        }
-    }
-
-    // ######POST
-    String post(String URL) {
-        if (URL.contains("api.php/app") || URL.contains("xgapp")) {
-            return "";
-        } else if (URL.contains(".vod")) {
-            return "";
-        } else {
-            return "";
-        }
-    }
-
-    // ######cookie
-    String cookie(String URL) {
-        if (URL.contains("api.php/app") || URL.contains("xgapp")) {
-            return "";
-        } else if (URL.contains(".vod")) {
-            return "";
-        } else {
-            return "";
         }
     }
 
@@ -653,7 +598,7 @@ public class AppYs extends Spider {
     }
 
     // ######选集
-    private final HashMap<String, String> parseUrlMap = new HashMap<>();
+    private final HashMap<String, ArrayList<String>> parseUrlMap = new HashMap<>();
 
     private void genPlayList(String URL, JSONObject object, String json, JSONObject vod, String vid) throws JSONException {
         ArrayList<String> playUrls = new ArrayList<>();
@@ -673,14 +618,19 @@ public class AppYs extends Spider {
             JSONArray vodUrlWithPlayer = data.getJSONArray("vod_url_with_player");
             for (int i = 0; i < vodUrlWithPlayer.length(); i++) {
                 JSONObject from = vodUrlWithPlayer.getJSONObject(i);
-                String flag = stopVipFlag(from.getString("name"));
+                String flag = from.optString("code").trim();
+                if (flag.isEmpty())
+                    flag = from.getString("name").trim();
                 playFlags.add(flag);
                 playUrls.add(from.getString("url"));
-                String purl = from.optString("parse_api");
-                if (purl.contains("jpg.hou.lu/jm/za/index.php")) {
-                    purl = "http://vip.mengx.vip/home/api?type=ys&uid=3249696&key=aefqrtuwxyEFHKNOQY&url=";
+                String purl = from.optString("parse_api").trim();
+                ArrayList<String> parseUrls = parseUrlMap.get(flag);
+                if (parseUrls == null) {
+                    parseUrls = new ArrayList<>();
+                    parseUrlMap.put(flag, parseUrls);
                 }
-                parseUrlMap.put(flag, purl);
+                if (!purl.isEmpty() && !parseUrls.contains(purl))
+                    parseUrls.add(purl);
             }
         } else if (URL.contains("xgapp")) {
             JSONObject data = object.getJSONObject("data").getJSONObject("vod_info");
@@ -697,14 +647,19 @@ public class AppYs extends Spider {
             JSONArray vodUrlWithPlayer = data.getJSONArray("vod_url_with_player");
             for (int i = 0; i < vodUrlWithPlayer.length(); i++) {
                 JSONObject from = vodUrlWithPlayer.getJSONObject(i);
-                String flag = stopVipFlag(from.getString("name"));
+                String flag = from.optString("code").trim();
+                if (flag.isEmpty())
+                    flag = from.getString("name").trim();
                 playFlags.add(flag);
                 playUrls.add(from.getString("url"));
-                String purl = from.optString("parse_api");
-                if (purl.contains("jpg.hou.lu/jm/za/index.php")) {
-                    purl = "http://vip.mengx.vip/home/api?type=ys&uid=3249696&key=aefqrtuwxyEFHKNOQY&url=";
+                String purl = from.optString("parse_api").trim();
+                ArrayList<String> parseUrls = parseUrlMap.get(flag);
+                if (parseUrls == null) {
+                    parseUrls = new ArrayList<>();
+                    parseUrlMap.put(flag, parseUrls);
                 }
-                parseUrlMap.put(flag, purl);
+                if (!purl.isEmpty() && !parseUrls.contains(purl))
+                    parseUrls.add(purl);
             }
         } else if (/*urlPattern2.matcher(URL).find()*/URL.contains(".vod")) {
             JSONObject data = object.getJSONObject("data");
@@ -721,65 +676,45 @@ public class AppYs extends Spider {
             JSONArray vodUrlWithPlayer = data.getJSONArray("vod_play_list");
             for (int i = 0; i < vodUrlWithPlayer.length(); i++) {
                 JSONObject from = vodUrlWithPlayer.getJSONObject(i);
-                String flag = stopVipFlag(from.getJSONObject("player_info").getString("show"));
+                String flag = from.getJSONObject("player_info").optString("from").trim();
+                if (flag.isEmpty())
+                    flag = from.getJSONObject("player_info").optString("show").trim();
                 playFlags.add(flag);
                 playUrls.add(from.getString("url"));
                 try {
                     ArrayList<String> parses = new ArrayList<>();
                     String[] parse1 = from.getJSONObject("player_info").optString("parse").split(",");
                     String[] parse2 = from.getJSONObject("player_info").optString("parse2").split(",");
-                    for (String p : parse1) {
-                        if (parsePattern.matcher(p).find()) {
-                            boolean add = true;
-                            for (Pattern pt : parseMatchForDotVod) {
-                                if (pt.matcher(p).find()) {
-                                    add = false;
-                                    break;
-                                }
-                            }
-                            if (add) {
-                                parses.add(p);
-                            }
-                        }
+                    parses.addAll(Arrays.asList(parse1));
+                    parses.addAll(Arrays.asList(parse2));
+                    ArrayList<String> parseUrls = parseUrlMap.get(flag);
+                    if (parseUrls == null) {
+                        parseUrls = new ArrayList<>();
+                        parseUrlMap.put(flag, parseUrls);
                     }
-                    for (String p : parse2) {
-                        if (parsePattern.matcher(p).find()) {
-                            boolean add = true;
-                            for (Pattern pt : parseMatchForDotVod) {
-                                if (pt.matcher(p).find()) {
-                                    add = false;
-                                    break;
-                                }
-                            }
-                            if (add) {
-                                parses.add(p);
-                            }
-                        }
-                    }
-                    if (parses.size() > 0 && parses.get(0).contains("=")) {
-                        String purl = parses.get(0);
+                    for (String purl : parses) {
                         if (purl.contains("http")) {
                             Matcher matcher = parsePattern1.matcher(purl);
                             if (matcher.find()) {
-                                purl = matcher.group(0).replace("..", ".").replace("vip.aotian.love", "vip.gaotian.love");
+                                purl = matcher.group(0);
                             }
                         } else if (purl.contains("//")) {
                             Matcher matcher = parsePattern1.matcher(purl);
                             if (matcher.find()) {
-                                purl = "http:" + matcher.group(0).replace("..", ".");
+                                purl = "http:" + matcher.group(0);
                             }
                         } else {
                             Matcher matcher = parsePattern2.matcher(URL);
                             if (matcher.find()) {
                                 Matcher matcher1 = parsePattern1.matcher(URL);
                                 if (matcher1.find()) {
-                                    purl = matcher.group(0) + matcher1.group(0).replace("..", ".");
+                                    purl = matcher.group(0) + matcher1.group(0);
                                 }
                             }
                         }
-                        parseUrlMap.put(flag, purl);
-                    } else {
-                        parseUrlMap.put(flag, "http://1.117.152.239:39000/?url=");
+                        purl = purl.replace("..", ".").trim();
+                        if (!purl.isEmpty() && !parseUrls.contains(purl))
+                            parseUrls.add(purl);
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -800,319 +735,74 @@ public class AppYs extends Spider {
             JSONObject playList = data.getJSONObject("videolist");
             Iterator<String> playListKeys = playList.keys();
             while (playListKeys.hasNext()) {
-                String from = playListKeys.next();
-                JSONArray playListUrls = playList.getJSONArray(from);
+                String flag = playListKeys.next();
+                ArrayList<String> parseUrls = parseUrlMap.get(flag);
+                if (parseUrls == null) {
+                    parseUrls = new ArrayList<>();
+                    parseUrlMap.put(flag, parseUrls);
+                }
+                JSONArray playListUrls = playList.getJSONArray(flag);
                 ArrayList<String> urls = new ArrayList<>();
                 for (int j = 0; j < playListUrls.length(); j++) {
                     JSONObject urlObj = playListUrls.getJSONObject(j);
-                    urls.add(urlObj.getString("title") + "$" + urlObj.getString("url"));
+                    String url = urlObj.getString("url");
+                    if (url.contains("url=")) {
+                        int spIdx = url.indexOf("url=") + 4;
+                        String pUrl = url.substring(0, spIdx).trim();
+                        if (!pUrl.isEmpty() && !parseUrls.contains(pUrl))
+                            parseUrls.add(pUrl);
+                        urls.add(urlObj.getString("title") + "$" + url.substring(spIdx).trim());
+                    } else {
+                        urls.add(urlObj.getString("title") + "$" + url);
+                    }
                 }
-                playFlags.add(stopVipFlag(from));
+                playFlags.add(flag);
                 playUrls.add(TextUtils.join("#", urls));
             }
         }
-//        for (int i = 0; i < playFlags.size(); i++) {
-//            String pu = playUrls.get(i).split("#")[0].split("\\$")[1];
-//            System.out.println(pu + " is video?" + isVideoFormat(pu));
-//            playerContent(playFlags.get(i), pu, new ArrayList<>());
-//        }
         vod.put("vod_play_from", TextUtils.join("$$$", playFlags));
         vod.put("vod_play_url", TextUtils.join("$$$", playUrls));
     }
 
-    private String getParseUrl(String URL, String flag) {
-        String parseUrl = "";
-        if (urlPattern2.matcher(URL).find()) {
-            if (parseUrlMap.containsKey(flag))
-                parseUrl = parseUrlMap.get(flag);
-        } else if (URL.contains("api.php/app/") || URL.contains("xgapp")) {
-            if (parseUrlMap.containsKey(flag))
-                parseUrl = parseUrlMap.get(flag);
-        } else {
-            parseUrl = URL;
-        }
-        if (parseUrl.contains("svip.jhyun.jx.cn") || parseUrl.contains("svip.jhdyw.vip")) {
-            if (flag.contains("人人迷")) {
-                parseUrl = "http://www.1080kan.cc/jiexi/rrmi.php?url=";
-            } else if (flag.contains("人人")) {
-                parseUrl = "http://www.1080kan.cc/jiexi/rr.php?url=";
-            } else if (flag.contains("番茄")) {
-                parseUrl = "http://www.1080kan.cc/jiexi/fq.php?url=";
-            } else {
-                parseUrl = "https://jx.parwix.com:4433/player/?url=";
-            }
-        } else if (parseUrl.contains("jhsj.manduhu.com") || parseUrl.contains("v.jhdyw.vip/nhdz666")) {
-            parseUrl = "https://jx.parwix.com:4433/player/?url=";
-        } else if (parseUrl.contains("x-n.cc")) {
-            parseUrl = "https://jx.parwix.com:4433/player/?url=";
-        }
-        return parseUrl;
-    }
-
-    private String getPlayerUrl(String URL, String parseUrl, String playUrl) {
-        if (URL.contains("xgapp") || URL.contains("api.php/app/") || /*urlPattern2.matcher(URL).find()*/URL.contains(".vod")) {
-            if (playUrl.indexOf(".m3u8") > 15 || playUrl.indexOf(".mp4") > 15 || playUrl.contains("/obj/tos")) {
-                if (playUrl.contains("url=")) {
-                    return "https://www.baidu.com/s?wd=" + playUrl.split("url=")[1];
-                } else {
-                    return "https://www.baidu.com/s?wd=" + playUrl;
-                }
-            } else if (!parseUrl.contains("url=") && playUrl.contains("RongXingVR")) {
-                return "https://www.baidu.com/s?wd=https://fast.rongxingvr.cn:8866/api/?key=nShWumGdMIbTwngTbI&url=" + playUrl;
-            } else if (!parseUrl.contains("url=") && playUrl.contains("LT")) {
-                return "https://www.baidu.com/s?wd=https://f7.pyxddc.com/bcjx/4k.php?url=" + playUrl;
-            } else if (!parseUrl.contains("url=") && playUrl.contains("renrenmi")) {
-                return "https://www.baidu.com/s?wd=https://kuba.renrenmi.cc:2266/api/?key=Y6UYLYtjImTCKe98JD&url=" + playUrl;
-            } else if (!parseUrl.contains("url=") && playUrl.contains(".html")) {
-                return "https://www.baidu.com/s?wd=http://1.117.152.239:39000/?url=" + playUrl;
-            } else if (playUrl.contains("xfy")) {
-                return "https://www.baidu.com/s?wd=http://jiexi.yunl.cc/api/?key=xYNESYSvHp1DV2ckKs&url=" + playUrl;
-            } else {
-                return "https://www.baidu.com/s?wd=" + parseUrl + playUrl;
-            }
-        } else if (urlPattern1.matcher(URL).find()) {
-            if (playUrl.indexOf(".m3u8") > 15 || playUrl.indexOf(".mp4") > 15 || playUrl.contains("/obj/tos")) {
-                if (playUrl.contains("url=")) {
-                    return "https://www.baidu.com/s?wd=" + playUrl.split("url=")[1];
-                } else {
-                    return "https://www.baidu.com/s?wd=" + playUrl;
-                }
-            } else if (playUrl.contains("xfy")) {
-                if (playUrl.contains("url=")) {
-                    return "https://www.baidu.com/s?wd=http://cache.dmtt.xyz/xfyjx/xfyjx.php?url=" + playUrl.split("url=")[1];
-                } else {
-                    return "https://www.baidu.com/s?wd=https://json.hfyrw.com/mao.go?url=" + playUrl;
-                }
-            } else if (playUrl.contains("www.bilibili.com")) {
-                String spUrl = playUrl.split("url=")[1];
-                return "https://www.baidu.com/s?wd=https://jx.parwix.com:4433/player/?url=" + spUrl;
-            } else if (URL.contains("zhenfy") || URL.contains("cztv") || URL.contains("1.14.63.101") || URL.contains("fit:8") || URL.contains("diliktv.xyz") || URL.contains("ppzhu.vip") || URL.contains("api.8d8q.com") || URL.contains("haokanju1.cc") || URL.contains("cztv")) {
-                return "https://www.baidu.com/s?wd=" + playUrl + "&app=10000&account=272775028&password=qq272775028";
-            } else if (URL.contains("lxyyy") || URL.contains("j.zjj.life") || URL.contains("lktv") || URL.contains("0818tv") || URL.contains("ruoxinew")) {
-                return "https://www.baidu.com/s?wd=https://play.tkys.tv/?url=" + playUrl.split("url=")[1];
-            } else {
-                return "https://www.baidu.com/s?wd=" + playUrl;
-            }
-        } else {
-            return "https://www.baidu.com/s?wd=" + playUrl;
-        }
-    }
-
     // ######视频地址
-    private void getFinalVideo(String uu, JSONObject result) throws JSONException {
-        if (uu.contains("baidu.com")) {
-            String playurl = uu.split("wd=")[1];
-            if (playurl.contains("duoduozy.com") || playurl.contains("suoyo.cc")) {
-                String uuu = "https://www.6080kan.cc/app.php?url=" + playurl;
-                String content = OkHttpUtil.string(uuu, null);
-                JSONObject obj = new JSONObject(content);
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", obj.getString("url"));
-                result.put("header", "{\"User-Agent\":\" Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.81 Safari/537.36 SE 2.X MetaSr 1.0\",\"referer\":\" https://player.duoduozy.com\",\"origin\":\" https://dp.duoduozy.com\",\"Host\":\" cache.m3u8.suoyo.cc\"}");
-            } else if (playurl.contains("xfy")) {
-                String content = OkHttpUtil.string(playurl, null);
-                JSONObject obj = new JSONObject(content);
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", obj.getString("url"));
-                result.put("header", "{\"referer\":\" appguapi.lihaoyun.top:11543\",\"User-Agent\":\" Dart/2.14 (dart:io)\"}}");
-            } else if (playurl.contains("api.iopenyun.com:88")) {
-                if (playurl.contains("html")) {
-                    String content = OkHttpUtil.string("https://api.m3u8.tv:5678/home/api?type=ys&uid=233711&key=dgilouvFKNRSWX2467&url=" + playurl.split("=")[1], null);
-                    JSONObject obj = new JSONObject(content);
-                    String ppurl = obj.getString("url");
-                    result.put("parse", 0);
-                    result.put("playUrl", "");
-                    result.put("url", ppurl);
-                } else {
-                    result.put("parse", 1);
-                    result.put("playUrl", "");
-                    result.put("url", playurl);
-                    result.put("ua", "Mozilla/5.0 Windows10");
-                    result.put("header", "{\"Referer\":\"https://user.iopenyun.com:520/user/video/\"}");
-                }
-            } else if (playurl.contains("cat.wkfile.com")) {
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", playurl);
-                result.put("header", "{\"User-Agent\":\" Lavf/58.12.100\",\"Referer\":\" wkfile.com\"}");
-            } else if (!playurl.contains("=") && playurl.indexOf(".m3u8") > 15 || playurl.indexOf(".mp4") > 15 || playurl.contains("/obj/tos")) {
-                if (playurl.contains("hsl.ysgc.xyz")) {
-                    String content = OkHttpUtil.string("https://jx.ysgc.xyz/?url=" + playurl, null);
-                    JSONObject obj = new JSONObject(content);
-                    String ppurl = obj.getString("url");
-                    result.put("parse", 0);
-                    result.put("playUrl", "");
-                    result.put("url", ppurl);
-                    result.put("header", "{\"Referer\":\" https://ysgc.cc\"}");
-                } else if (playurl.contains("1.ruifenglb.com")) {
-                    result.put("parse", 0);
-                    result.put("playUrl", "");
-                    result.put("url", playurl);
-                    result.put("header", "{\"Referer\":\" https://1.ruifenglb.com\"}");
-                } else {
-                    Matcher matcher = Pattern.compile(".*(http.*)").matcher(playurl);
-                    if (matcher.find()) {
-                        result.put("parse", 0);
-                        result.put("playUrl", "");
-                        result.put("url", matcher.group(1));
-                    } else {
-                        result.put("parse", 0);
-                        result.put("playUrl", "");
-                        result.put("url", playurl);
-                    }
-                }
-            } else if (playurl.contains("=")) {
-                HashMap<String, String> headers = new HashMap();
-                headers.put("User-Agent", "Mozilla/5.0 Android");
-                Map<String, List<String>> respHeaders = new TreeMap<>();
-                String content = OkHttpUtil.stringNoRedirect(playurl, headers, respHeaders);
-                String redLoc = OkHttpUtil.getRedirectLocation(respHeaders);
-                if (redLoc != null) {
-                    String finalurl = "";
-                    while (redLoc != null) {
-                        finalurl = redLoc;
-                        if (redLoc.indexOf(".mp4") > 30) {
-                            break;
-                        } else {
-                            headers.put("User-Agent", "Mozilla/5.0 Android");
-                            content = OkHttpUtil.stringNoRedirect(finalurl, headers, respHeaders);
-                            redLoc = OkHttpUtil.getRedirectLocation(respHeaders);
-                        }
-                    }
-                    String realurl = finalurl;
-                    if (realurl.contains("=http") || realurl.contains("url=")) {
-                        if (content.contains("<html")) {
-                            result.put("parse", 1);
-                            result.put("playUrl", "");
-                            result.put("url", realurl);
-                        } else {
-                            JSONObject obj = new JSONObject(content);
-                            String ppurl = obj.getString("url");
-                            result.put("parse", 0);
-                            result.put("playUrl", "");
-                            result.put("url", ppurl);
-                            if (realurl.contains("mgtv.com")) {
-                                result.put("header", "{\"User-Agent\":\" Mozilla/5.0\", \"Referer\":\" \"}");
-                            } else if (realurl.contains("bilibili.com")) {
-                            }
-                        }
-                    } else {
-                        if (playurl.contains("www.mgtv.com")) {
-                            result.put("parse", 0);
-                            result.put("playUrl", "");
-                            result.put("url", realurl);
-                            result.put("header", "{\"User-Agent\":\" Mozilla/5.0\", \"Referer\":\" \"}");
-                        } else {
-                            result.put("parse", 0);
-                            result.put("playUrl", "");
-                            result.put("url", realurl);
-                        }
-                    }
-                } else {
-                    if (content.contains("<html")) {
-                        boolean sniffer = false;
-                        for (Pattern p : htmlVideoKeyMatch) {
-                            if (p.matcher(content).find()) {
-                                sniffer = true;
-                                break;
-                            }
-                        }
-                        if (sniffer) {
-                            result.put("parse", 1);
-                            result.put("playUrl", "");
-                            result.put("url", playurl);
-                        } else {
-                            if (playurl.split("url=")[1].contains("http")) {
-                                result.put("parse", 1);
-                                result.put("playUrl", "");
-                                result.put("url", "http://1.117.152.239:39000/?url=" + playurl.split("url=")[1]);
-                            } else if (playurl.split("url=")[1].contains("renrenmi")) {
-                                result.put("parse", 1);
-                                result.put("playUrl", "");
-                                result.put("url", "http://www.1080kan.cc/jiexi/rrmi.php?url=" + playurl.split("url=")[1]);
-                                result.put("header", "{\"Referer\":\"http://www.1080kan.cc/\"}");
-                            } else {
-                                String id = playurl.split("url=")[1];
-								/*
-                                String uuu = "https://vip.gaotian.love/api/?key=sRy0QAq8hqXRlrEtrq&url=" + id;
-                                content = OkHttpUtil.string(uuu, null);
-                                JSONObject obj = new JSONObject(content);
-                                String realurl = obj.optString("url", "");
-                                if (realurl.isEmpty())
-                                    realurl = obj.optString("msg", "");
-                                result.put("parse", 0);
-                                result.put("playUrl", "");
-                                result.put("url", realurl);
-								 */
-                                result.put("parse", 1);
-                                result.put("playUrl", "");
-                                result.put("url", "https://jx.banyung.xyz:7799/player/?url=" + playurl.split("url=")[1]);
-                            }
-                        }
-                    } else {
-                        String jsonUrl = "";
-                        try {
-                            JSONObject obj = new JSONObject(content);
-                            jsonUrl = obj.optString("url");
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                        if (jsonUrl.length() > 1) {
-                            String realurl = jsonUrl;
-                            if (playurl.contains("mgtv.com")) {
-                                result.put("parse", 0);
-                                result.put("playUrl", "");
-                                result.put("url", realurl);
-                                result.put("header", "{\"User-Agent\":\" Mozilla/5.0\", \"Referer\":\" \"}");
-                            } else if (playurl.contains("bilibili.com")) {
-                                result.put("parse", 0);
-                                result.put("playUrl", "");
-                                result.put("url", realurl);
-                            } else {
-                                result.put("parse", 0);
-                                result.put("playUrl", "");
-                                result.put("url", realurl);
-                            }
-                        } else if (playurl.split("url=")[1].contains("http")) {
-                            result.put("parse", 1);
-                            result.put("playUrl", "");
-                            result.put("url", "http://1.117.152.239:39000/?url=" + playurl.split("url=")[1]);
-                        } else if (playurl.split("url=")[1].contains("renrenmi")) {
-                            result.put("parse", 1);
-                            result.put("playUrl", "");
-                            result.put("url", "http://www.1080kan.cc/jiexi/rrmi.php?url=" + playurl.split("url=")[1]);
-                            result.put("header", "{\"Referer\":\"http://www.1080kan.cc/\"}");
-                        } else {
-                            String id = playurl.split("url=")[1];
-							/*
-                            String uuu = "https://vip.gaotian.love/api/?key=sRy0QAq8hqXRlrEtrq&url=" + id;
-                            content = OkHttpUtil.string(uuu, null);
-                            JSONObject obj = new JSONObject(content);
-                            String realurl = obj.optString("url", "");
-                            if (realurl.isEmpty())
-                                realurl = obj.optString("msg", "");
-                            result.put("parse", 0);
-                            result.put("playUrl", "");
-                            result.put("url", realurl);
-							*/
-                            result.put("parse", 1);
-                            result.put("playUrl", "");
-                            result.put("url", "https://jx.banyung.xyz:7799/player/?url=" + playurl.split("url=")[1]);
-                        }
-                    }
-                }
-            } else {
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", playurl);
+    private JSONObject getFinalVideo(String flag, ArrayList<String> parseUrls, String url) throws JSONException {
+        String htmlPlayUrl = "";
+        for (String parseUrl : parseUrls) {
+            if (parseUrl.isEmpty() || parseUrl.equals("null"))
+                continue;
+            String playUrl = parseUrl + url;
+            String content = desc(OkHttpUtil.string(playUrl, null), (byte) 4);
+            JSONObject tryJson = null;
+            try {
+                tryJson = Misc.jsonParse(url, content);
+            } catch (Throwable th) {
+
             }
-        } else {
-            result.put("parse", 1);
-            result.put("playUrl", "");
-            result.put("url", uu);
+            if (tryJson != null && tryJson.has("url") && tryJson.has("header")) {
+                tryJson.put("header", tryJson.getJSONObject("header").toString());
+                return tryJson;
+            }
+            if (content.contains("<html")) {
+                boolean sniffer = false;
+                for (Pattern p : htmlVideoKeyMatch) {
+                    if (p.matcher(content).find()) {
+                        sniffer = true;
+                        break;
+                    }
+                }
+                if (sniffer) {
+                    htmlPlayUrl = parseUrl;
+                }
+            }
         }
+        if (!htmlPlayUrl.isEmpty()) {
+            JSONObject result = new JSONObject();
+            result.put("parse", 1);
+            result.put("playUrl", htmlPlayUrl);
+            result.put("url", url);
+            return result;
+        }
+        return null;
     }
 
     @Override
@@ -1123,5 +813,24 @@ public class AppYs extends Spider {
     @Override
     public boolean isVideoFormat(String url) {
         return Misc.isVideoFormat(url);
+    }
+
+
+    private String getApiUrl() {
+        if (extInfos == null || extInfos.length < 1)
+            return "";
+        return extInfos[0].trim();
+    }
+
+    private String[] extInfos = null;
+
+    protected String desc(String src, byte type) {
+        if (extInfos.length > 1) {
+            String descFlag = extInfos[1];
+            if (descFlag.equals("nftv")) {
+
+            }
+        }
+        return src;
     }
 }
