@@ -52,7 +52,7 @@ public class XPathEgg extends XPath {
             json.put("link5", link5);
             json.put("t", tk);
             // Thanks 猫大
-            SpiderReqResult srr = SpiderReq.postJson("https://cat.idontcare.top/ssr/dandan", json, new HashMap<>());
+            SpiderReqResult srr = SpiderReq.postJson(tk, json, new HashMap<>());
             JSONObject obj = new JSONObject(srr.content);
             vod.put("vod_play_from", obj.getString("vod_play_from"));
             vod.put("vod_play_url", obj.getString("vod_play_url"));
@@ -71,7 +71,7 @@ public class XPathEgg extends XPath {
             headers.put("accept", "*/*");
             headers.put("x-requested-with", "XMLHttpRequest");
             headers.put("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36");
-            headers.put("origin", "https://www.dandanzan.cc");
+            headers.put("origin", "https://www.dandanzan.top");
             headers.put("accept-language", "zh-CN,zh;q=0.9");
             SpiderReqResult srr = SpiderReq.postForm(rule.getPlayUrl(), json, headers);
             JSONObject result = new JSONObject();

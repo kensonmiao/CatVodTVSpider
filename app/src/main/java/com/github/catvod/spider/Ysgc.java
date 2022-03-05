@@ -324,7 +324,7 @@ public class Ysgc extends Spider {
                     result.put("header", "{\"Referer\":\"https://www.ysgc.cc/\"}");
                 }
                 return result.toString();
-            } else if (id.contains("duoduozy.com")) {
+            } else if (id.contains("duoduozy.com") || id.contains("m3u8.cache.suoyo.cc")) {
                 String uuu = "https://www.6080kan.cc/app.php?url=" + id;
                 SpiderReqResult srr = SpiderReq.get(new SpiderUrl(uuu, null));
                 return Misc.jsonParse(id, srr.content).toString();

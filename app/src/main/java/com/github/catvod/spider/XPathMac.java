@@ -89,7 +89,6 @@ public class XPathMac extends XPath {
                     SpiderDebug.log(e);
                 }
             }
-            SpiderDebug.log(srr.content);
         }
         return result;
     }

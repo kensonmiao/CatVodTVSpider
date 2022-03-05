@@ -326,7 +326,10 @@ public class XPath extends Spider {
             result.put("list", list);
             return result.toString();
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            SpiderDebug.log(e.getMessage());
+            for (StackTraceElement traceEl : e.getStackTrace()) {
+                SpiderDebug.log(traceEl.toString());
+            }
         }
         return "";
     }
