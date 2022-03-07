@@ -36,8 +36,7 @@ public class Duboku extends XPathFilter {
         String videoUrl = null;
         // 尝试分析直连
         try {
-            SpiderReqResult srr = fetch(webUrl);
-            Document doc = Jsoup.parse(srr.content);
+            Document doc = Jsoup.parse(fetch(webUrl));
             Elements allScript = doc.select("script");
             for (int i = 0; i < allScript.size(); i++) {
                 String scContent = allScript.get(i).html().trim();

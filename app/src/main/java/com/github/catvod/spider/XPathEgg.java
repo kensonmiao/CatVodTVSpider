@@ -53,7 +53,7 @@ public class XPathEgg extends XPath {
             json.put("infoid", infoid);
             json.put("link5", link5);
             json.put("t", tk);
-            OkHttpUtil.postJson(OkHttpUtil.defaultClient(), "https://cat.idontcare.top/ssr/dandan", json.toString(), new OKCallBack.OKCallBackString() {
+            OkHttpUtil.postJson(OkHttpUtil.defaultClient(), tk, json.toString(), new OKCallBack.OKCallBackString() {
                 @Override
                 public void onFailure(Call call, Exception e) {
                 }
