@@ -102,6 +102,25 @@
 
 ---
 
+**推送功能扩展（需v2.1.0.Beta6及以上版本）**
+
+入口 [PushAgent](/app/src/main/java/com/github/catvod/spider/PushAgent.java)
+
+需要在配置文件中，加入key为`push_agent`的站点，数据返回格式和普通爬虫一致
+
+```json
+{
+  "key": "push_agent",
+  "name": "推送",
+  "type": 3,
+  "api": "csp_PushAgent",
+  "searchable": 0,
+  "quickSearch": 0,
+  "filterable": 0
+}
+```
+---
+
 ## 基础类
 ----
 
