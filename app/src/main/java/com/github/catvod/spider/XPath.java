@@ -196,10 +196,15 @@ public class XPath extends Spider {
             title = vodNode.selOne(rule.getDetailName()).asString().trim();
             title = rule.getDetailNameR(title);
 
-            cover = vodNode.selOne(rule.getDetailImg()).asString().trim();
-            cover = rule.getDetailImgR(cover);
-            cover = Misc.fixUrl(webUrl, cover);
-
+            if(!rule.getDetailImg().isEmpty()) {
+                try {
+                    cover = vodNode.selOne(rule.getDetailImg()).asString().trim();
+                    cover = rule.getDetailImgR(cover);
+                    cover = Misc.fixUrl(webUrl, cover);
+                } catch (Exception e) {
+                    SpiderDebug.log(e);
+                }
+            }
             if (!rule.getDetailCate().isEmpty()) {
                 try {
                     category = vodNode.selOne(rule.getDetailCate()).asString().trim();

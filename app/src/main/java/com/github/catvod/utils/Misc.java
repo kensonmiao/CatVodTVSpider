@@ -7,6 +7,9 @@ import com.github.catvod.crawler.SpiderDebug;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.Charset;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.regex.Pattern;
 
 public class Misc {
@@ -36,6 +39,9 @@ public class Misc {
         return false;
     }
 
+    public static Charset Iso8859_1 = Charset.forName("iso-8859-1");
+    public static Charset Utf8 = Charset.forName("UTF-8");
+
     private static final Pattern snifferMatch = Pattern.compile("http((?!http).){26,}?\\.(m3u8|mp4)\\?.*|http((?!http).){26,}\\.(m3u8|mp4)|http((?!http).){26,}?/m3u8\\?pt=m3u8.*|http((?!http).)*?default\\.ixigua\\.com/.*|http((?!http).)*?cdn-tos[^\\?]*|http((?!http).)*?/obj/tos[^\\?]*|http.*?/player/m3u8play\\.php\\?url=.*|http.*?/player/.*?[pP]lay\\.php\\?url=.*|http.*?/playlist/m3u8/\\?vid=.*|http.*?\\.php\\?type=m3u8&.*|http.*?/download.aspx\\?.*|http.*?/api/up_api.php\\?.*|https.*?\\.66yk\\.cn.*|http((?!http).)*?netease\\.com/file/.*");
 
     public static boolean isVideoFormat(String url) {
@@ -46,6 +52,24 @@ public class Misc {
             return true;
         }
         return false;
+    }
+
+    public static String DecodeString(String str, Charset charset) {
+        try {
+            byte[] digest = MessageDigest.getInstance("MD5").digest(str.getBytes(charset));
+            StringBuilder stringBuilder = new StringBuilder();
+            for (byte b : digest) {
+                String toHexString = Integer.toHexString(b & 255);
+                if (toHexString.length() < 2) {
+                    stringBuilder.append(0);
+                }
+                stringBuilder.append(toHexString);
+            }
+            return stringBuilder.toString().toLowerCase();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return "";
+        }
     }
 
     public static String fixUrl(String base, String src) {

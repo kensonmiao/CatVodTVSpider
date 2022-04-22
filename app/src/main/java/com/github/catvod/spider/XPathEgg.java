@@ -12,7 +12,7 @@ import java.util.List;
 
 import okhttp3.Call;
 
-public class XPathEgg extends XPath {
+public class XPathEgg extends XPathFilter {
 
     String tk = "";
 
@@ -28,10 +28,7 @@ public class XPathEgg extends XPath {
 
     @Override
     protected String categoryUrl(String tid, String pg, boolean filter, HashMap<String, String> extend) {
-        if (Integer.parseInt(pg) <= 1) {
-            return rule.getCateUrl().replace("{cateId}", tid);
-        }
-        return (rule.getCateUrl() + "index_{catePg}.html").replace("{cateId}", tid).replace("{catePg}", pg);
+        return super.categoryUrl(tid, String.valueOf(Integer.parseInt(pg) - 1), filter, extend);
     }
 
     @Override

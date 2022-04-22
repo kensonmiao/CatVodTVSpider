@@ -2,6 +2,7 @@ package com.github.catvod.crawler;
 
 import android.content.Context;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.HashMap;
@@ -10,6 +11,8 @@ import java.util.List;
 public abstract class Spider {
 
     public static JSONObject empty = new JSONObject();
+
+    protected Context context;
 
     public void init(Context context) {
     }

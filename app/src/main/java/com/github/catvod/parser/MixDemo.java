@@ -1,17 +1,23 @@
 package com.github.catvod.parser;
 
+import android.content.SharedPreferences;
 import android.util.Base64;
 
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.spider.Init;
+import com.github.catvod.spider.Teleport;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+
+import dalvik.system.DexClassLoader;
 
 public class MixDemo {
 
@@ -51,12 +57,40 @@ public class MixDemo {
 
     public static JSONObject parse(LinkedHashMap<String, HashMap<String, String>> jx, String nameMe, String flag, String url) {
         try {
+            SpiderDebug.log("Calling myself .....................");
+            SharedPreferences sharedPreferences = Init.CONTEXT.getSharedPreferences(Init.CONTEXT.getPackageName() + "cat_vod", 0);
+            //Use teleported parser first
+            for(String teleportKey : Teleport.JAR_MAPPER.keySet()) {
+                SpiderDebug.log("Play video via tele-parser ----- " + teleportKey);
+                Teleport.TeleportModel model = Teleport.JAR_MAPPER.get(teleportKey);
+                DexClassLoader loader = Teleport.getClassLoader(Init.CONTEXT, model.jarName);
+                Class targetClass = loader.loadClass("com.github.catvod.parser.MixDemo");
+                Method method = targetClass.getMethod("parse", LinkedHashMap.class, String.class, String.class, String.class);
+                String originalLink = sharedPreferences.getString("sss_api_config_id", "");
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString("sss_api_config_id", model.fromLink);
+                editor.apply();
+                try {
+                    JSONObject returnedData = (JSONObject) method.invoke(null, model.parsersMap, nameMe, flag, url);
+                    if (returnedData != null && returnedData.has("url")) {
+                        return returnedData;
+                    }
+                } catch (Exception ex) {
+
+                }
+                editor = sharedPreferences.edit();
+                editor.putString("sss_api_config_id", originalLink);
+                editor.apply();
+            }
+
             if (configs == null) {
                 configs = new HashMap<>();
                 Iterator<String> keys = jx.keySet().iterator();
                 while (keys.hasNext()) {
                     String key = keys.next();
                     HashMap<String, String> parseBean = jx.get(key);
+                    if(parseBean.get("url").startsWith("teleport"))
+                        continue;
                     String type = parseBean.get("type");
                     if (type.equals("1") || type.equals("0")) {
                         try {
@@ -84,6 +118,8 @@ public class MixDemo {
                 for (int i = 0; i < flagJx.size(); i++) {
                     String key = flagJx.get(i);
                     HashMap<String, String> parseBean = jx.get(key);
+                    if(parseBean.get("url").startsWith("teleport"))
+                        continue;
                     String type = parseBean.get("type");
                     if (type.equals("1")) {
                         jsonJx.put(key, mixUrl(parseBean.get("url"), parseBean.get("ext")));
@@ -96,6 +132,8 @@ public class MixDemo {
                 while (keys.hasNext()) {
                     String key = keys.next();
                     HashMap<String, String> parseBean = jx.get(key);
+                    if(parseBean.get("url").startsWith("teleport"))
+                        continue;
                     String type = parseBean.get("type");
                     if (type.equals("1")) {
                         jsonJx.put(key, mixUrl(parseBean.get("url"), parseBean.get("ext")));
