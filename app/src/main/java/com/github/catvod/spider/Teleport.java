@@ -73,6 +73,10 @@ public class Teleport extends Spider {
             originalConfig = model.originalSiteJson.get(extJson.getString("key"));
             SpiderDebug.log(model.jarName);
             loader = getClassLoader(context, model.jarName);
+
+            Class targetInitClass = loader.loadClass("com.github.catvod.spider.Init");
+            targetInitClass.getMethod("init", Context.class).invoke(null, context);
+
             Class targetClass = loader.loadClass("com.github.catvod.spider." +
                     originalConfig.getString("api").replace("csp_", ""));
             invokedSpider = targetClass.newInstance();
@@ -176,7 +180,7 @@ public class Teleport extends Spider {
             updateLockState(true);
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putString("sss_api_config_id", model.fromLink);
-            editor.apply();
+            editor.commit();
             Thread timerUnlockThread = new Thread() {
                 public void run() {
                     try {
@@ -197,7 +201,7 @@ public class Teleport extends Spider {
         } finally {
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putString("sss_api_config_id", Init.getOriginApiId());
-            editor.apply();
+            editor.commit();
             updateLockState(false);
         }
         return dataBack;

@@ -12,6 +12,9 @@ import com.github.catvod.live.TxtSubscribe;
 import com.github.catvod.utils.okhttp.OkHttpUtil;
 
 import java.io.ByteArrayInputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +35,23 @@ public class Proxy extends Spider {
             try {
                 DexClassLoader loader = Teleport.getClassLoader(context, model.jarName);
                 Class targetClass = loader.loadClass("com.github.catvod.spider.Proxy");
+                Object innerProxy = targetClass.newInstance();
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString("sss_api_config_id", model.fromLink);
+                editor.apply();
+                try {
+                    targetClass.getMethod("init", Context.class).invoke(innerProxy, context);
+                    SpiderDebug.log("Done to init proxy class.");
+                }catch (Exception ex) {
+                    StringWriter sw = new StringWriter();
+                    PrintWriter pw = new PrintWriter(sw);
+                    ex.printStackTrace(pw);
+                    SpiderDebug.log(ex.getMessage());
+                    SpiderDebug.log(sw.toString());
+                }
+                editor = sharedPreferences.edit();
+                editor.putString("sss_api_config_id", Init.getOriginApiId());
+                editor.apply();
                 teleProxy.put(model.fromLink, targetClass);
             } catch (Exception e) {
                 e.printStackTrace();

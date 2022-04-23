@@ -142,10 +142,7 @@ public class Init {
 
                             model.jarName = jarFileName;
                             existingJarFileNames.add(model.jarName);
-                            DexClassLoader loader = Teleport.getClassLoader(context, model.jarName);
-                            Class targetInitClass = loader.loadClass("com.github.catvod.spider.Init");
-                            targetInitClass.getMethod("init", Context.class).invoke(null, context);
-                            SpiderDebug.log("Done to load Init --------" + teleportTo);
+
                             //Load Parsers
                             LinkedHashMap<String, HashMap<String, String>> parsers = getParsers(theRealConfigObj);
                             model.parsersMap = parsers;
