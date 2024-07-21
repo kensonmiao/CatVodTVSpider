@@ -1,29 +1,61 @@
 package com.github.catvod.spider;
 
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.util.Base64;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.utils.AES;
+import com.github.catvod.utils.Misc;
 import com.github.catvod.utils.okhttp.OKCallBack;
 import com.github.catvod.utils.okhttp.OkHttpUtil;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import okhttp3.Call;
 
 public class XPathEgg extends XPathFilter {
 
-    String tk = "";
+    //region Original Page Data
+    private static String pageData;
+    private static String originalPageData = "";
+
+    public static Object[] vod(Map<String, String> map) {
+        if (map.get("type").equals("printPage")) return printPage();
+        return null;
+    }
+
+    private static Object[] printPage() {
+        Object[] returnedObj = new Object[3];
+        returnedObj[0] = 200;
+        returnedObj[1] = "text/html";
+        returnedObj[2] = new ByteArrayInputStream(pageData.getBytes());
+        return returnedObj;
+    }
 
     @Override
-    protected void loadRuleExt(String json) {
+    public void init(Context context, String ext) {
+        String iv = "7456258946879235";
+        String key = "s9o4js0#de0e%@!c";
         try {
-            JSONObject jsonObj = new JSONObject(json);
-            tk = jsonObj.optString("decodeTk").trim();
-        } catch (JSONException e) {
-            SpiderDebug.log(e);
+            byte[] ivInByte = iv.getBytes(StandardCharsets.UTF_8);
+            byte[] keyInByte = key.getBytes(StandardCharsets.UTF_8);
+            //Grab js template for 蛋蛋 detail page
+            originalPageData = OkHttpUtil.string("https://codeberg.org/kensonlogin55/CatPic/raw/branch/main/xpath/xpathEgg", null);
+            originalPageData = AES.decryptOfAesCbcPkcs7(Base64.decode(originalPageData, 0), keyInByte, ivInByte);
+        }catch (Exception ex) {
+            SpiderDebug.log(ex.getMessage());
         }
+        super.init(context, ext);
     }
 
     @Override
@@ -49,24 +81,37 @@ public class XPathEgg extends XPathFilter {
             JSONObject json = new JSONObject();
             json.put("infoid", infoid);
             json.put("link5", link5);
-            json.put("t", tk);
-            OkHttpUtil.postJson(OkHttpUtil.defaultClient(), tk, json.toString(), new OKCallBack.OKCallBackString() {
-                @Override
-                public void onFailure(Call call, Exception e) {
-                }
 
-                @Override
-                public void onResponse(String response) {
-                    try {
-                        JSONObject obj = new JSONObject(response);
-                        vod.put("vod_play_from", obj.getString("vod_play_from"));
-                        vod.put("vod_play_url", obj.getString("vod_play_url"));
-                    } catch (JSONException e) {
-                    }
-                }
-            });
-        } catch (Exception e) {
+            //Set to static var, then use proxy to populate the js script
+            pageData = originalPageData.replace("{infoid}", infoid).replace("{link5}", link5);
+            //SpiderDebug.log(pageData);
+            int millSecCount = 0;
+            XPathEggJSInterface jsInterface = new XPathEggJSInterface();
+            parser(Proxy.localProxyUrl() + "?do=egg&type=printPage", jsInterface);
+            String returnedLinks = jsInterface.getLinksInJava();
 
+            //Wait for result back, or return null as timeout result while over 30 sec
+            while (returnedLinks.isEmpty() && millSecCount <= 10000) {
+                Thread.sleep(100);
+                millSecCount += 100;
+                returnedLinks = jsInterface.getLinksInJava();
+            }
+
+            if (returnedLinks.isEmpty()) return;
+
+            //Re-organize result
+            String[] resources = returnedLinks.split("@@@");
+            StringBuilder resourceNames = new StringBuilder();
+            StringBuilder items = new StringBuilder();
+            for (String resource : resources) {
+                if (resource.isEmpty()) continue;
+                String[] resNameAndLinks = resource.split("!!!");
+                resourceNames.append(resNameAndLinks[0]).append("$$$");
+                items.append(resNameAndLinks[1].replace("|", "#").substring(0, resNameAndLinks[1].length() - 1)).append("$$$");
+            }
+            vod.put("vod_play_from", resourceNames.substring(0, resourceNames.length() - 3));
+            vod.put("vod_play_url", items.substring(0, items.length() - 3));
+        } catch (Exception ignored) {
         }
     }
 
@@ -92,7 +137,7 @@ public class XPathEgg extends XPathFilter {
                 public void onResponse(String response) {
                     try {
                         result.put("url", response);
-                    } catch (JSONException e) {
+                    } catch (JSONException ignored) {
                     }
                 }
             });
@@ -106,5 +151,39 @@ public class XPathEgg extends XPathFilter {
             SpiderDebug.log(e);
         }
         return "";
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    public static void parser(String url, XPathEggJSInterface jsInterfaceObj) {
+        Init.run(() -> {
+            SpiderDebug.log("Start to load webView:" + url);
+            WebView webView = Misc.getWebView();
+            jsInterfaceObj.webView = webView;
+            webView.addJavascriptInterface(jsInterfaceObj, "andFunc");
+            webView.loadUrl(url);
+        });
+    }
+
+    public static class XPathEggJSInterface {
+
+        private String links = "";
+        private WebView webView;
+
+        @JavascriptInterface
+        public void setLinks(String links) {
+            this.links = links;
+            destroy();
+        }
+
+        public String getLinksInJava() {
+            return links;
+        }
+
+        protected void destroy() {
+            Init.run(() -> {
+                webView.destroy();
+                webView = null;
+            });
+        }
     }
 }
